@@ -13,7 +13,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # জিপ ফাইল অটোমেটিক আনজিপ করার স্টেপ
       - name: Unzip project archive
         run: |
           if [ -f "arrow-puzzle.zip" ]; then
@@ -23,6 +22,38 @@ jobs:
           else
             unzip -o *.zip -d . || true
           fi
+
+      - name: Set up Python for Icon Generation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Generate and Set App Icons automatically
+        run: |
+          python -c "
+          import os
+          from PIL import Image
+          
+          if os.path.exists('1788532247419.png'):
+              img = Image.open('1788532247419.png').convert('RGBA')
+              sizes = {
+                  'mipmap-mdpi': 48,
+                  'mipmap-hdpi': 72,
+                  'mipmap-xhdpi': 96,
+                  'mipmap-xxhdpi': 144,
+                  'mipmap-xxxhdpi': 192,
+              }
+              base_dir = 'app/src/main/res'
+              for folder, size in sizes.items():
+                  dir_path = os.path.join(base_dir, folder)
+                  os.makedirs(dir_path, exist_ok=True)
+                  resized = img.resize((size, size), Image.Resampling.LANCZOS)
+                  resized.save(os.path.join(dir_path, 'ic_launcher.png'))
+                  resized.save(os.path.join(dir_path, 'ic_launcher_round.png'))
+              print('Icons generated successfully!')
+          else:
+              print('Logo file not found, skipping icon generation.')
+          "
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -35,6 +66,29 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
+      - name: Generate debug keystore
+        run: |
+          keytool -genkeypair \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Install required Android SDK platform
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arrow-escape-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
       - name: Generate debug keystore
         run: |
           keytool -genkeypair \
