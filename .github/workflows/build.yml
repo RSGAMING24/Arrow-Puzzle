@@ -1,0 +1,60 @@
+name: Build Arrow Escape APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # জিপ ফাইল অটোমেটিক আনজিপ করার স্টেপ
+      - name: Unzip project archive
+        run: |
+          if [ -f "arrow-puzzle.zip" ]; then
+            unzip -o arrow-puzzle.zip -d .
+          elif [ -f "arrow-escape.zip" ]; then
+            unzip -o arrow-escape.zip -d .
+          else
+            unzip -o *.zip -d . || true
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Generate debug keystore
+        run: |
+          keytool -genkeypair \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Install required Android SDK platform
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arrow-escape-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
